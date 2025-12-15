@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<!--
+    入职9周年纪念日软件
+    作者: MYJ
+    描述: 一个用于纪念入职9周年的日历应用程序，支持备忘录管理、日期标记、数据导入导出等功能
+    特性:
+      - 日历视图展示重要日期
+      - 备忘录添加和管理功能
+      - 农历日期显示
+      - 法定节假日标识
+      - 数据导入导出(CSV/JSON格式)
+      - 响应式设计，支持移动端
+      - 纪念日统计信息展示
+-->
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>入职9周年纪念日软件</title>
+  <!-- 引入农历计算库 -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/lunar-javascript/1.7.4/lunar.min.js"></script>
+  <style>
+    /* 
+     * 根变量定义
+     * 定义了应用程序的主要颜色主题和字体
+     */
+    :root {
+      --bg: #FFF8F6;
+      --card: #ffffff;
+      --primary: #FF8CBC;
+      --accent: #FFD6EA;
+      --muted: #8B8B8B;
+      --shadow: 0 8px 18px rgba(230, 40, 120, 0.08);
+      font-family: "Helvetica Neue", "PingFang SC", "Microsoft Yahei", Arial, sans-serif;
+    }
+
+    /* 
+     * 通用样式设置
+     * 设置盒模型、body样式和应用布局
+     */
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #FFF8F6 0%, #FFF0F4 100%);
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 
+     * 应用布局设置
+     * 使用CSS Grid布局，定义主内容区域和侧边栏
+     */
+    .app {
+      max-width: 1100px;
+      margin: 24px auto 0;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 560px 360px;
+      /* 增加200px宽度 (从360px到560px) */
+      gap: 18px;
+      flex: 1;
+    }
+
+    /* 
+     * 头部样式
+     * 包含logo和控制按钮区域的布局
+     */
+    header {
+      grid-column: 1/-1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px
+    }
+
+    .logo .badge {
+      width: 62px;
+      height: 62px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), #FFD6EA);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      box-shadow: var(--shadow)
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    /* 
+     * 按钮样式
+     * 定义通用按钮样式和悬停效果
+     */
+    button {
+      background: var(--card);
+      border: none;
+      padding: 8px 12px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+      cursor: pointer;
+      transition: all 0.2s ease
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08)
+    }
+
+    /* 
+     * 日历卡片样式
+     * 包含日历标题、星期标题和日期网格的样式
+     */
+    .calendar-card {
+      background: var(--card);
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: var(--shadow)
+    }
+
+    .month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px
+    }
+
+    .month-title {
+      font-weight: 700
+    }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      color: var(--muted);
+      font-size: 13px;
+      /* 调整内边距使其与日期网格对齐 */
+      padding: 6px 3px;
+      margin: 0;
+      /* 添加文本居中对齐 */
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      /* 添加内边距以匹配星期标题 */
+      padding: 0 3px;
+    }
+
+    /* 
+     * 日期单元格样式
+     * 定义每个日期格子的外观和特殊日期的标记
+     */
+    .cell {
+      background: linear-gradient(180deg, #fff, #fff);
+      border-radius: 12px;
+      min-height: 84px;
+      padding: 8px;
+      position: relative;
+      border: 1px dashed rgba(200, 200, 200, 0.06);
+      /* 添加文本居中对齐 */
+      text-align: center;
+    }
+
+    .cell.out {
+      opacity: 0.35
+    }
+
+    .cell .date {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .cell .memo-dot {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 10px;
+      background: var(--accent);
+      max-width: 90%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis
+    }
+
+    /* 
+     * 侧边栏样式
+     * 包含统计卡片、当前日期信息、备忘录列表等组件的样式
+     */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px
+    }
+
+    .card {
+      background: var(--card);
+      padding: 16px;
+      border-radius: 14px;
+      box-shadow: var(--shadow)
+    }
+
+    .today-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .highlight {
+      background: linear-gradient(90deg, #FFF1F6, #FFF8F2);
+      padding: 8px;
+      border-radius: 10px
+    }
+
+    .memos-list {
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 6px
+    }
+
+    .memo-item {
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: #FFF7FA;
+      border: 1px solid #FFEAF2;
+      transition: all 0.2s ease
+    }
+
+    .memo-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255, 140, 188, 0.15)
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .actions {
+      display: flex;
+      gap: 6px
+    }
+
+    input[type=file] {
+      display: none
+    }
+
+    .cute {
+      font-size: 12px;
+      color: #FF5B9A
+    }
+
+    /* 
+     * 模态框样式
+     * 定义弹出窗口的样式，包括背景遮罩和内容区域
+     */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 10, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100
+    }
+
+    .modal {
+      width: 420px;
+      background: var(--card);
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18)
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #EEE
+    }
+
+    footer {
+      grid-column: 1/-1;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 16px 0;
+      margin-top: 0;
+    }
+
+    .anniv-tag {
+      background: linear-gradient(90deg, #FFDEE9, #FFD6EA);
+      padding: 6px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      color: #9B1556
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px
+    }
+
+    .sidebar-title {
+      font-weight: 700;
+      font-size: 16px
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px
+    }
+
+    .stat-card {
+      padding: 12px;
+      border-radius: 10px;
+      background: #FFF7FA;
+      text-align: center
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary)
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted)
+    }
+
+    .memo-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px
+    }
+
+    .memo-actions button {
+      font-size: 10px;
+      padding: 4px 8px
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: var(--muted)
+    }
+
+    .empty-state img {
+      width: 60px;
+      opacity: 0.5;
+      margin-bottom: 8px
+    }
+
+    /* 
+     * 烟花效果样式
+     * 定义庆祝动画效果的样式
+     */
+    .fireworks-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .firework {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    /* 
+     * 平板端媒体查询
+     * 调整中等屏幕设备上的布局
+     */
+    @media(max-width:980px) {
+      .app {
+        grid-template-columns: 1fr;
+        margin: 16px auto 0;
+        padding: 10px;
+      }
+
+      .sidebar {
+        order: 2
+      }
+
+      footer {
+        padding: 12px 0;
+      }
+    }
+
+    /* 
+     * 手机端媒体查询
+     * 优化小屏幕设备上的显示效果
+     */
+    @media(max-width:768px) {
+      .app {
+        padding: 10px;
+        margin: 16px auto 0;
+      }
+
+      header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .logo {
+        width: 100%;
+      }
+
+      .controls {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      button {
+        padding: 6px 10px;
+        font-size: 14px;
+      }
+
+      .calendar-card {
+        padding: 12px;
+      }
+
+      .grid {
+        gap: 4px;
+      }
+
+      .cell {
+        min-height: 60px;
+        padding: 4px;
+      }
+
+      .cell .date {
+        top: 4px;
+        right: 6px;
+        font-size: 10px;
+      }
+
+      .cell .memo-dot {
+        font-size: 10px;
+        padding: 2px 6px;
+        left: 4px;
+        bottom: 4px;
+      }
+
+      .modal {
+        width: 95%;
+        padding: 12px;
+      }
+
+      textarea {
+        min-height: 80px;
+      }
+
+      .stats-grid {
+        gap: 8px;
+      }
+
+      .stat-card {
+        padding: 8px;
+      }
+
+      .stat-value {
+        font-size: 16px;
+      }
+
+      .memos-list {
+        max-height: 300px;
+      }
+
+      .memo-item {
+        padding: 8px;
+      }
+
+      footer {
+        font-size: 12px;
+        margin-top: auto;
+        padding: 10px 0;
+      }
+    }
+
+    /* 
+     * 小屏幕手机优化
+     * 针对极小屏幕设备的进一步优化
+     */
+    @media(max-width:480px) {
+      .app {
+        padding: 8px;
+        margin: 12px auto 0;
+      }
+
+      .logo .badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        font-size: 18px;
+      }
+
+      h1 {
+        font-size: 18px;
+      }
+
+      .small {
+        font-size: 11px;
+      }
+
+      .controls {
+        gap: 6px;
+      }
+
+      button {
+        padding: 5px 8px;
+        font-size: 13px;
+        border-radius: 8px;
+      }
+
+      .weekdays {
+        font-size: 12px;
+        padding: 4px;
+      }
+
+      .cell {
+        min-height: 50px;
+      }
+
+      .cell .date {
+        font-size: 9px;
+      }
+
+      .cell .memo-dot {
+        font-size: 9px;
+        padding: 2px 4px;
+      }
+
+      .stat-value {
+        font-size: 14px;
+      }
+
+      .stat-label {
+        font-size: 10px;
+      }
+
+      .sidebar-title {
+        font-size: 15px;
+      }
+
+      footer {
+        font-size: 11px;
+        padding: 8px 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">
+        <div class="badge">岚</div>
+        <div>
+          <h1>入职9周年纪念日</h1>
+          <div class="small">工作顺利，生活愉快</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="prev">◀ 上月</button>
+        <button id="next">下月 ▶</button>
+        <button id="today">回到默认</button>
+        <button id="goToToday">回到今日</button>
+        <button id="exportCsv">导出 CSV</button>
+        <button id="exportJson">导出 JSON</button>
+        <label title="导入备份录 (CSV 或 JSON)"><input id="fileIn" type="file" accept=".csv,.json" />导入</label>
+      </div>
+    </header>
+
+    <section class="calendar-card">
+      <div class="month-nav">
+        <div class="month-title" id="monthTitle">2026 年 1 月</div>
+        <div class="today-badge">
+          <div class="anniv-tag">9th</div>
+          <div class="small">2017-01-11 → 2026-01-11</div>
+        </div>
+      </div>
+      <div class="weekdays">
+        <div>日</div>
+        <div>一</div>
+        <div>二</div>
+        <div>三</div>
+        <div>四</div>
+        <div>五</div>
+        <div>六</div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <aside class="sidebar">
+      <!-- 统计卡片 -->
+      <div class="card">
+        <div class="sidebar-header">
+          <div class="sidebar-title">📊 纪念日统计</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="totalMemos">0</div>
+            <div class="stat-label">总备忘录</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="currentMonthMemos">0</div>
+            <div class="stat-label">本月备忘录</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="upcomingMemos">0</div>
+            <div class="stat-label">即将到期</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="annivCount">9</div>
+            <div class="stat-label">周年纪念</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 当前日期信息 -->
+      <div class="card">
+        <div class="sidebar-header">
+          <div class="sidebar-title">📅 重要的日子</div>
+          <div class="small">今天：<span id="nowStr"></span></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div>
+            <div style="font-weight:700;color:var(--primary)">2026-01-11</div>
+            <div class="small">入职9周年</div>
+          </div>
+          <div class="anniv-tag">9周年</div>
+        </div>
+      </div>
+
+      <!-- 备忘录列表 -->
+      <div class="card">
+        <div class="sidebar-header">
+          <div class="sidebar-title">📝 备忘录列表</div>
+          <div class="small">共<span id="memoCount">0</span>条</div>
+        </div>
+        <div class="memos-list" id="memosList">
+          <!-- 动态内容 -->
+        </div>
+      </div>
+
+      <!-- 快速操作 -->
+      <div class="card">
+        <div class="sidebar-header">
+          <div class="sidebar-title">⚡ 快速操作</div>
+          <div class="small">数据管理</div>
+        </div>
+        <div class="row" style="flex-wrap:wrap">
+          <button id="clearAll">清空全部</button>
+          <button id="downloadSample">下载示例</button>
+          <button id="exportCsv2">导出CSV</button>
+          <button id="exportJson2">导出JSON</button>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+  <footer>入职9周年纪念软件 By AILL</footer>
+</body>
+
+<!-- 模态框 -->
+<div id="modal" style="display:none" class="modal-bg">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-weight:700" id="modalDate">2026-01-11</div>
+      <div class="small"><span id="diffYears"></span></div>
+    </div>
+    <div class="small" id="lunarDate" style="margin-bottom: 8px; color: #FF8CBC;"></div>
+    <textarea id="memoText" placeholder="在此输入备忘录..."></textarea>
+    <div style="display:flex;justify-content:space-between;margin-top:8px">
+      <div class="small">支持导出为 CSV/JSON</div>
+      <div class="actions">
+        <button id="deleteMemo">删除</button>
+        <button id="saveMemo">保存</button>
+        <button id="closeModal">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 初始设置
+  // 定义默认视图日期和入职纪念日日期
+  const DEFAULT_VIEW = new Date(2026, 0, 11); // 2026-01-11
+  const ANNIV_FROM = new Date(2017, 0, 11); // 2017-01-11
+
+  // 获取DOM元素引用
+  const grid = document.getElementById('grid');
+  const monthTitle = document.getElementById('monthTitle');
+  const nowStr = document.getElementById('nowStr');
+  const memosList = document.getElementById('memosList');
+  const modalBg = document.getElementById('modal');
+  const modalDate = document.getElementById('modalDate');
+  const memoText = document.getElementById('memoText');
+  const diffYears = document.getElementById('diffYears');
+  const totalMemos = document.getElementById('totalMemos');
+  const currentMonthMemos = document.getElementById('currentMonthMemos');
+  const upcomingMemos = document.getElementById('upcomingMemos');
+  const memoCount = document.getElementById('memoCount');
+
+  // 初始化视图日期和今日日期
+  let view = new Date(DEFAULT_VIEW);
+  let today = new Date(); // 添加今日日期变量
+  
+  // 数据存储结构：{ 'YYYY-MM-DD': 'memo text' }
+  const STORAGE_KEY = 'anniv_memos_v1';
+
+  // 中国法定节假日数据 (部分常见节假日)
+  // 包含固定日期节假日和变动日期节假日（如春节、清明节等）
+  const HOLIDAYS = {
+    // 元旦
+    '01-01': '元旦',
+    
+    // 春节相关日期 (农历正月初一等，这里使用部分年份的实际公历日期)
+    '2017-01-28': '春节', '2017-01-29': '初二', '2017-01-30': '初三', '2017-01-31': '初四', 
+    '2017-02-01': '初五', '2017-02-02': '初六', '2017-02-03': '初七',
+    '2018-02-16': '春节', '2018-02-17': '初二', '2018-02-18': '初三', '2018-02-19': '初四',
+    '2018-02-20': '初五', '2018-02-21': '初六', '2018-02-22': '初七',
+    '2019-02-05': '春节', '2019-02-06': '初二', '2019-02-07': '初三', '2019-02-08': '初四',
+    '2019-02-09': '初五', '2019-02-10': '初六', '2019-02-11': '初七',
+    '2020-01-25': '春节', '2020-01-26': '初二', '2020-01-27': '初三', '2020-01-28': '初四',
+    '2020-01-29': '初五', '2020-01-30': '初六', '2020-01-31': '初七',
+    '2021-02-12': '春节', '2021-02-13': '初二', '2021-02-14': '初三', '2021-02-15': '初四',
+    '2021-02-16': '初五', '2021-02-17': '初六', '2021-02-18': '初七',
+    '2022-02-01': '春节', '2022-02-02': '初二', '2022-02-03': '初三', '2022-02-04': '初四',
+    '2022-02-05': '初五', '2022-02-06': '初六', '2022-02-07': '初七',
+    '2023-01-22': '春节', '2023-01-23': '初二', '2023-01-24': '初三', '2023-01-25': '初四',
+    '2023-01-26': '初五', '2023-01-27': '初六', '2023-01-28': '初七',
+    '2024-02-10': '春节', '2024-02-11': '初二', '2024-02-12': '初三', '2024-02-13': '初四',
+    '2024-02-14': '初五', '2024-02-15': '初六', '2024-02-16': '初七',
+    '2025-01-29': '春节', '2025-01-30': '初二', '2025-01-31': '初三', '2025-02-01': '初四',
+    '2025-02-02': '初五', '2025-02-03': '初六', '2025-02-04': '初七',
+    '2026-02-17': '春节', '2026-02-18': '初二', '2026-02-19': '初三', '2026-02-20': '初四',
+    '2026-02-21': '初五', '2026-02-22': '初六', '2026-02-23': '初七',
+    
+    // 清明节 (部分年份)
+    '2017-04-04': '清明节',
+    '2018-04-05': '清明节',
+    '2019-04-05': '清明节',
+    '2020-04-04': '清明节',
+    '2021-04-04': '清明节',
+    '2022-04-05': '清明节',
+    '2023-04-05': '清明节',
+    '2024-04-04': '清明节',
+    '2025-04-04': '清明节',
+    '2026-04-05': '清明节',
+    '2027-04-05': '清明节',
+    '2028-04-04': '清明节',
+    '2029-04-04': '清明节',
+    
+    // 劳动节
+    '05-01': '劳动节',
+    
+    // 端午节 (部分年份)
+    '2017-05-30': '端午节',
+    '2018-06-18': '端午节',
+    '2019-06-07': '端午节',
+    '2020-06-25': '端午节',
+    '2021-06-14': '端午节',
+    '2022-06-03': '端午节',
+    '2023-06-22': '端午节',
+    '2024-06-10': '端午节',
+    '2025-05-31': '端午节',
+    '2026-05-20': '端午节',
+    '2027-05-09': '端午节',
+    '2028-05-27': '端午节',
+    '2029-05-16': '端午节',
+    
+    // 中秋节 (部分年份)
+    '2017-10-04': '中秋节',
+    '2018-09-24': '中秋节',
+    '2019-09-13': '中秋节',
+    '2020-10-01': '中秋节',
+    '2021-09-21': '中秋节',
+    '2022-09-10': '中秋节',
+    '2023-09-29': '中秋节',
+    '2024-09-17': '中秋节',
+    '2025-10-06': '中秋节',
+    '2026-09-25': '中秋节',
+    '2027-09-15': '中秋节',
+    '2028-10-04': '中秋节',
+    '2029-09-22': '中秋节',
+    
+    // 国庆节
+    '10-01': '国庆节'
+  };
+
+  // 默认数据
+  // 初始化默认备忘录数据
+  const defaultData = {
+    '2017-01-11': '入职纪念日',
+    '2026-01-11': '入职9周年'
+  };
+
+  /**
+   * 从本地存储加载备忘录数据
+   * @returns {Object} 备忘录数据对象
+   */
+  function loadData() {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
+      return { ...defaultData };
+    }
+    try {
+      return JSON.parse(raw) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  
+  /**
+   * 将备忘录数据保存到本地存储
+   * @param {Object} obj - 要保存的备忘录数据对象
+   */
+  function saveData(obj) { localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
+
+  // 加载备忘录数据
+  let memos = loadData();
+
+  /**
+   * 格式化日期为 YYYY-MM-DD 字符串
+   * @param {Date} d - 要格式化的日期对象
+   * @returns {string} 格式化后的日期字符串
+   */
+  function fmt(d) {
+    const y = d.getFullYear(); const m = ('0' + (d.getMonth() + 1)).slice(-2); const day = ('0' + d.getDate()).slice(-2); return `${y}-${m}-${day}`;
+  }
+
+  /**
+   * 获取指定日期的农历信息
+   * @param {string} dateStr - 日期字符串 (YYYY-MM-DD)
+   * @returns {string} 农历日期信息
+   */
+  function getLunarDate(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      console.log('尝试使用lunar-javascript计算农历日期:', dateStr);
+      
+      // 检查库是否已正确加载
+      if (typeof Solar === 'undefined' || typeof Lunar === 'undefined') {
+        console.log('lunar-javascript库未正确加载，使用降级方案');
+        return getSimpleLunarDate(date);
+      }
+      
+      console.log('Solar和Lunar对象可用');
+      // 使用 lunar-javascript 库计算农历日期
+      const solar = Solar.fromYmd(date.getFullYear(), date.getMonth() + 1, date.getDate());
+      const lunar = solar.getLunar();
+      const result = lunar.toString();
+      console.log('lunar-javascript计算结果:', result);
+      // 返回完整的农历日期格式
+      return result;
+    } catch (e) {
+      console.error('农历计算出错:', e);
+      // 出错时返回简化版本
+      try {
+        return getSimpleLunarDate(new Date(dateStr));
+      } catch (e2) {
+        console.error('降级处理也失败:', e2);
+        return '农历日期';
+      }
+    }
+  }
+  
+  /**
+   * 简化版农历计算（用于降级处理）
+   * @param {Date} date - 要计算农历的日期对象
+   * @returns {string} 农历日期信息
+   */
+  function getSimpleLunarDate(date) {
+    // 这里应该使用真实的农历计算，但由于复杂性，我们使用近似值
+    // 实际项目中应该使用专业的农历库
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+      
+    // 这只是一个示例映射，实际的农历计算非常复杂
+    // 2017年春节相关日期的农历映射
+    const lunarMap2017 = {
+      '2017-01-28': '农历正月初一', '2017-01-29': '农历正月初二', '2017-01-30': '农历正月初三', '2017-01-31': '农历正月初四', 
+      '2017-02-01': '农历正月初五', '2017-02-02': '农历正月初六', '2017-02-03': '农历正月初七', '2017-02-04': '农历正月初八',
+      '2017-02-05': '农历正月初九', '2017-02-06': '农历正月初十', '2017-02-07': '农历正月十一', '2017-02-08': '农历正月十二',
+      '2017-02-09': '农历正月十三', '2017-02-10': '农历正月十四', '2017-02-11': '农历正月十五', '2017-02-12': '农历正月十六',
+      '2017-02-13': '农历正月十七', '2017-02-14': '农历正月十八', '2017-02-15': '农历正月十九', '2017-02-16': '农历正月二十',
+      '2017-02-17': '农历正月廿一', '2017-02-18': '农历正月廿二', '2017-02-19': '农历正月廿三', '2017-02-20': '农历正月廿四',
+      '2017-02-21': '农历正月廿五', '2017-02-22': '农历正月廿六', '2017-02-23': '农历正月廿七', '2017-02-24': '农历正月廿八',
+      '2017-02-25': '农历正月廿九', '2017-02-26': '农历二月初一', '2017-02-27': '农历二月初二', '2017-02-28': '农历二月初三'
+    };
+    
+    // 2026年部分日期的农历映射
+    const lunarMap2026 = {
+      '2026-01-01': '农历十一月十三',
+      '2026-01-02': '农历十一月十四',
+      '2026-01-03': '农历十一月十五',
+      '2026-01-04': '农历十一月十六',
+      '2026-01-05': '农历十一月十七',
+      '2026-01-06': '农历十一月十八',
+      '2026-01-07': '农历十一月十九',
+      '2026-01-08': '农历十一月二十',
+      '2026-01-09': '农历十一月廿一',
+      '2026-01-10': '农历十一月廿二',
+      '2026-01-11': '农历十一月廿三',
+      '2026-01-12': '农历十一月廿四',
+      '2026-01-13': '农历十一月廿五',
+      '2026-01-14': '农历十一月廿六',
+      '2026-01-15': '农历十一月廿七',
+      '2026-01-16': '农历十一月廿八',
+      '2026-01-17': '农历十一月廿九',
+      '2026-01-18': '农历腊月初一',
+      '2026-01-19': '农历腊月初二',
+      '2026-01-20': '农历腊月初三',
+      '2026-01-21': '农历腊月初四',
+      '2026-01-22': '农历腊月初五',
+      '2026-01-23': '农历腊月初六',
+      '2026-01-24': '农历腊月初七',
+      '2026-01-25': '农历腊月初八',
+      '2026-01-26': '农历腊月初九',
+      '2026-01-27': '农历腊月初十',
+      '2026-01-28': '农历腊月十一',
+      '2026-01-29': '农历腊月十二',
+      '2026-01-30': '农历腊月十三',
+      '2026-01-31': '农历腊月十四',
+        
+      '2026-02-01': '农历腊月十五',
+      '2026-02-02': '农历腊月十六',
+      '2026-02-03': '农历腊月十七',
+      '2026-02-04': '农历腊月十八',
+      '2026-02-05': '农历腊月十九',
+      '2026-02-06': '农历腊月二十',
+      '2026-02-07': '农历腊月廿一',
+      '2026-02-08': '农历腊月廿二',
+      '2026-02-09': '农历腊月廿三',
+      '2026-02-10': '农历腊月廿四',
+      '2026-02-11': '农历腊月廿五',
+      '2026-02-12': '农历腊月廿六',
+      '2026-02-13': '农历腊月廿七',
+      '2026-02-14': '农历腊月廿八',
+      '2026-02-15': '农历腊月廿九',
+      '2026-02-16': '农历腊月三十',
+      '2026-02-17': '农历正月初一', // 春节
+      '2026-02-18': '农历正月初二',
+      '2026-02-19': '农历正月初三',
+      '2026-02-20': '农历正月初四',
+      '2026-02-21': '农历正月初五',
+      '2026-02-22': '农历正月初六',
+      '2026-02-23': '农历正月初七',
+      '2026-02-24': '农历正月初八',
+      '2026-02-25': '农历正月初九',
+      '2026-02-26': '农历正月初十',
+      '2026-02-27': '农历正月十一',
+      '2026-02-28': '农历正月十二'
+    };
+      
+    const dateKey = `${year}-${('0' + month).slice(-2)}-${('0' + day).slice(-2)}`;
+    // 合并所有年份的映射
+    const allLunarMap = {...lunarMap2017, ...lunarMap2026};
+    
+    if (allLunarMap[dateKey]) {
+      return allLunarMap[dateKey];
+    }
+      
+    // 如果没有找到映射，则返回更具体的格式
+    const monthNames = [
+      '正月', '二月', '三月', '四月', '五月', '六月',
+      '七月', '八月', '九月', '十月', '十一月', '十二月'
+    ];
+    
+    const dayNames = [
+      '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+      '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+      '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
+    ];
+    
+    // 返回一个更合理的默认值，而不是简单的"农历日期"
+    return `农历${monthNames[(month - 1) % 12]}${dayNames[(day - 1) % 30]}`;
+  }
+
+  /**
+   * 渲染日历视图
+   * 根据当前视图日期生成并显示日历网格
+   */
+  function render() {
+    grid.innerHTML = '';
+    const year = view.getFullYear();
+    const month = view.getMonth();
+    monthTitle.textContent = `${year} 年 ${month + 1} 月`;
+    const firstDay = new Date(year, month, 1);
+    const startDay = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // previous month's tail
+    const prevMonthDays = new Date(year, month, 0).getDate();
+    const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
+    for (let i = 0; i < totalCells; i++) {
+      const cell = document.createElement('div'); cell.className = 'cell';
+      let dayNum = i - startDay + 1;
+      let dateObj;
+      if (dayNum <= 0) { // previous month
+        dateObj = new Date(year, month - 1, prevMonthDays + dayNum);
+        cell.classList.add('out');
+      } else if (dayNum > daysInMonth) { // next month
+        dateObj = new Date(year, month + 1, dayNum - daysInMonth);
+        cell.classList.add('out');
+      } else {
+        dateObj = new Date(year, month, dayNum);
+      }
+      const dateStr = fmt(dateObj);
+      const dateLabel = document.createElement('div'); dateLabel.className = 'date'; dateLabel.textContent = dateObj.getDate();
+      cell.appendChild(dateLabel);
+      
+      // 添加节假日标识 - 优先显示具体日期的节日（如春节、清明节等）
+      let holidayName = null;
+      // 首先检查是否有特定年份的节日（如春节、清明节等）
+      if (HOLIDAYS[dateStr]) {
+        holidayName = HOLIDAYS[dateStr];
+      } 
+      // 如果没有特定年份的节日，则检查是否是固定日期的节日（如元旦、劳动节、国庆节）
+      else {
+        const monthDay = `${('0' + (dateObj.getMonth() + 1)).slice(-2)}-${('0' + dateObj.getDate()).slice(-2)}`;
+        holidayName = HOLIDAYS[monthDay];
+      }
+      
+      if (holidayName) {
+        const holidayBadge = document.createElement('div');
+        holidayBadge.style.position = 'absolute';
+        holidayBadge.style.left = '8px';
+        holidayBadge.style.top = '12px'; // 调整位置避免与9周年标识重叠
+        holidayBadge.style.background = 'rgba(255, 91, 154, 0.15)'; // 使用不同的背景色
+        holidayBadge.style.padding = '2px 4px';
+        holidayBadge.style.borderRadius = '4px';
+        holidayBadge.style.fontSize = '10px';
+        holidayBadge.style.color = '#FF5B9A';
+        holidayBadge.style.fontWeight = 'bold';
+        holidayBadge.textContent = holidayName;
+        cell.appendChild(holidayBadge);
+      }
+      
+      if (memos[dateStr]) {
+        const m = document.createElement('div'); m.className = 'memo-dot'; m.textContent = memos[dateStr]; cell.appendChild(m);
+      }
+      // highlight 2026-01-11
+      if (dateStr === '2026-01-11') {
+        cell.style.boxShadow = '0 6px 18px rgba(255,126,164,0.14)';
+        const badge = document.createElement('div'); 
+        badge.style.position = 'absolute'; 
+        badge.style.left = '8px'; 
+        badge.style.top = '24px'; 
+        badge.style.background = 'rgba(255,140,180,0.12)'; 
+        badge.style.padding = '4px 6px'; 
+        badge.style.borderRadius = '8px'; 
+        badge.style.fontSize = '11px'; 
+        badge.textContent = '9周年'; 
+        cell.appendChild(badge);
+      }
+      
+      // 为今日添加与2026-01-11相同的选中样式
+      const todayStr = fmt(today);
+      if (dateStr === todayStr) {
+        cell.style.boxShadow = '0 6px 18px rgba(255,126,164,0.14)';
+        const todayBadge = document.createElement('div'); 
+        todayBadge.style.position = 'absolute'; 
+        todayBadge.style.left = '8px'; 
+        todayBadge.style.top = '2px'; 
+        todayBadge.style.background = 'rgba(255,140,180,0.12)'; 
+        todayBadge.style.padding = '4px 6px'; 
+        todayBadge.style.borderRadius = '8px'; 
+        todayBadge.style.fontSize = '11px'; 
+        todayBadge.textContent = '今日'; 
+        cell.appendChild(todayBadge);
+      }
+
+      cell.addEventListener('click', () => openModal(dateStr));
+      grid.appendChild(cell);
+    }
+    renderMemosList();
+    updateStats();
+    nowStr.textContent = new Date().toISOString().slice(0, 10);
+  }
+
+  /**
+   * 更新统计信息
+   * 计算并更新侧边栏中的各种统计数据
+   */
+  function updateStats() {
+    // 更新统计信息
+    const memoKeys = Object.keys(memos);
+    // 添加默认备忘录数量（2个）
+    totalMemos.textContent = memoKeys.length + 2;
+    memoCount.textContent = memoKeys.length + 2;
+
+    // 计算本月备忘录数量
+    const currentYear = view.getFullYear();
+    const currentMonth = view.getMonth();
+    const currentMonthMemosCount = memoKeys.filter(key => {
+      const date = new Date(key);
+      return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+    }).length;
+    currentMonthMemos.textContent = currentMonthMemosCount;
+
+    // 计算即将到期的备忘录（未来7天内）
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    const upcomingCount = memoKeys.filter(key => {
+      const memoDate = new Date(key);
+      return memoDate >= today && memoDate <= nextWeek;
+    }).length;
+    upcomingMemos.textContent = upcomingCount;
+
+  }
+
+  /**
+   * 渲染备忘录列表
+   * 在侧边栏中显示所有备忘录条目
+   */
+  function renderMemosList() {
+    memosList.innerHTML = '';
+    let keys = Object.keys(memos).sort();
+
+    // 始终显示默认备忘录：入职纪念日和9周年纪念日
+    const defaultMemos = [
+      { date: '2017-01-11', text: '入职纪念日' },
+      { date: '2026-01-11', text: '入职9周年' }
+    ];
+
+    // 显示默认备忘录
+    defaultMemos.forEach(item => {
+      const div = document.createElement('div'); div.className = 'memo-item';
+      const row = document.createElement('div'); row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'flex-start';
+      const left = document.createElement('div'); left.style.flex = '1'; left.style.minWidth = '0';
+      left.innerHTML = `
+          <div style="font-weight:700;color:var(--primary)">${item.date}</div>
+          <div class="small" style="margin-top:4px;white-space:normal;word-break:break-word">${item.text}</div>
+          <div class="small" style="margin-top:4px">${calcDiffYears(item.date, '2017-01-11')}</div>
+        `;
+      const right = document.createElement('div'); right.style.flexShrink = '0'; right.style.marginLeft = '8px';
+      right.innerHTML = `
+          <div class="memo-actions">
+            <button data-date="${item.date}" class="jump">跳转</button>
+            <button data-date="${item.date}" class="edit">编辑</button>
+          </div>
+        `;
+      row.appendChild(left); row.appendChild(right); div.appendChild(row);
+      memosList.appendChild(div);
+    });
+
+    // 显示用户自定义的备忘录（排除默认备忘录）
+    const defaultDates = defaultMemos.map(memo => memo.date);
+    const userMemos = keys.filter(key => !defaultDates.includes(key));
+
+    userMemos.forEach(k => {
+      const div = document.createElement('div'); div.className = 'memo-item';
+      const row = document.createElement('div'); row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'flex-start';
+      const left = document.createElement('div'); left.style.flex = '1'; left.style.minWidth = '0';
+      left.innerHTML = `
+          <div style="font-weight:700;color:var(--primary)">${k}</div>
+          <div class="small" style="margin-top:4px;white-space:normal;word-break:break-word">${memos[k]}</div>
+          <div class="small" style="margin-top:4px">${calcDiffYears(k, '2017-01-11')}</div>
+        `;
+      const right = document.createElement('div'); right.style.flexShrink = '0'; right.style.marginLeft = '8px';
+      right.innerHTML = `
+          <div class="memo-actions">
+            <button data-date="${k}" class="jump">跳转</button>
+            <button data-date="${k}" class="edit">编辑</button>
+          </div>
+        `;
+      row.appendChild(left); row.appendChild(right); div.appendChild(row);
+      memosList.appendChild(div);
+    });
+
+    // bind buttons
+    memosList.querySelectorAll('button.jump').forEach(b => b.addEventListener('click', e => {
+      const d = e.target.dataset.date;
+      const dt = new Date(d);
+      view = new Date(dt.getFullYear(), dt.getMonth(), 11);
+      render();
+    }));
+    memosList.querySelectorAll('button.edit').forEach(b => b.addEventListener('click', e => {
+      openModal(e.target.dataset.date);
+    }));
+
+    // 更新备忘录计数（包括默认备忘录）
+    memoCount.textContent = keys.length + defaultMemos.length;
+  }
+
+  // 模态框相关变量和函数
+  let modalCurrentDate = null;
+  
+  /**
+   * 打开备忘录编辑模态框
+   * @param {string} dateStr - 日期字符串 (YYYY-MM-DD)
+   */
+  function openModal(dateStr) {
+    modalBg.style.display = 'flex';
+    modalCurrentDate = dateStr;
+    modalDate.textContent = dateStr;
+    memoText.value = memos[dateStr] || '';
+    diffYears.textContent = calcDiffYears(dateStr, '2017-01-11');
+    
+    // 显示农历信息
+    const lunarDate = document.getElementById('lunarDate');
+    lunarDate.textContent = getLunarDate(dateStr);
+  }
+  
+  /**
+   * 关闭备忘录编辑模态框
+   */
+  function closeModal() { modalBg.style.display = 'none'; modalCurrentDate = null; }
+
+  // 绑定模态框相关按钮事件
+  document.getElementById('closeModal').addEventListener('click', () => closeModal());
+  document.getElementById('saveMemo').addEventListener('click', () => {
+    if (!modalCurrentDate) return;
+    const txt = memoText.value.trim();
+    if (txt === '') { delete memos[modalCurrentDate]; } else { memos[modalCurrentDate] = txt; }
+    saveData(memos); render(); closeModal();
+  });
+  document.getElementById('deleteMemo').addEventListener('click', () => {
+    if (!modalCurrentDate) return;
+    delete memos[modalCurrentDate]; saveData(memos); render(); closeModal();
+  });
+
+  /**
+   * 计算两个日期之间的年份差
+   * @param {string} d1str - 结束日期字符串 (YYYY-MM-DD)
+   * @param {string} d2str - 开始日期字符串 (YYYY-MM-DD)
+   * @returns {string} 格式化后的年份差字符串
+   */
+  function calcDiffYears(d1str, d2str) {
+    try {
+      const d1 = new Date(d1str); const d2 = new Date(d2str);
+      let years = d1.getFullYear() - d2.getFullYear();
+      // adjust if before anniversary
+      const mm = d1.getMonth() - d2.getMonth();
+      if (mm < 0 || (mm === 0 && d1.getDate() < d2.getDate())) years--;
+      return `${d2str} → ${d1str} ： ${years} 年`;
+    } catch (e) { return '' }
+  }
+
+  // 导航按钮事件绑定
+  document.getElementById('prev').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); render(); });
+  document.getElementById('next').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); render(); });
+  document.getElementById('today').addEventListener('click', () => { view = new Date(DEFAULT_VIEW); render(); });
+  // 添加回到今日按钮事件监听
+  document.getElementById('goToToday').addEventListener('click', () => {
+    view = new Date(today.getFullYear(), today.getMonth(), 1);
+    render();
+  });
+
+  /**
+   * 导出备忘录为CSV格式
+   * 生成并下载CSV文件
+   */
+  function exportCsv() {
+    const rows = [['date', 'memo']];
+    Object.keys(memos).sort().forEach(k => { rows.push([k, memos[k].replace(/\n/g, '\\n')]); });
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'memos_export.csv'; a.click(); URL.revokeObjectURL(a.href);
+  }
+  document.getElementById('exportCsv').addEventListener('click', exportCsv);
+  document.getElementById('exportCsv2').addEventListener('click', exportCsv);
+
+  /**
+   * 导出备忘录为JSON格式
+   * 生成并下载JSON文件
+   */
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(memos, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'memos_backup.json'; a.click(); URL.revokeObjectURL(a.href);
+  }
+  document.getElementById('exportJson').addEventListener('click', exportJson);
+  document.getElementById('exportJson2').addEventListener('click', exportJson);
+
+  // 导入文件处理
+  document.getElementById('fileIn').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; if (!f) return; const txt = await f.text();
+    if (f.name.endsWith('.json')) {
+      try { const jd = JSON.parse(txt); memos = { ...memos, ...jd }; saveData(memos); render(); alert('已导入 JSON 数据'); }
+      catch (err) { alert('JSON 解析失败'); }
+    } else if (f.name.endsWith('.csv')) {
+      // very simple CSV parse
+      const lines = txt.split(/\r?\n/).filter(Boolean);
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = parseCsvLine(line);
+        if (parts.length >= 2) { const date = parts[0].trim(); const memo = parts[1].replace(/\\n/g, '\n'); memos[date] = memo; }
+      }
+      saveData(memos); render(); alert('已导入 CSV 数据');
+    } else { alert('只支持 csv 或 json 文件'); }
+    e.target.value = '';
+  });
+
+  /**
+   * 解析CSV行数据
+   * @param {string} line - CSV行数据
+   * @returns {Array} 解析后的字段数组
+   */
+  function parseCsvLine(line) {
+    const out = []; let cur = ''; let inq = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { if (inq && line[i + 1] === '"') { cur += '"'; i++; } else inq = !inq; }
+      else if (ch === ',' && !inq) { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur); return out;
+  }
+
+  // 清空数据和下载示例事件绑定
+  document.getElementById('clearAll').addEventListener('click', () => { if (confirm('确认清空全部备忘录？无法恢复。')) { memos = {}; saveData(memos); render(); } });
+  document.getElementById('downloadSample').addEventListener('click', () => {
+    const sample = {
+      '2017-01-11': '入职纪念日',
+      '2026-01-11': '9周年庆'
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'memos_sample.json'; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  // 初始渲染
+  render();
+  
+  // 页面加载完成后检查库是否正确加载
+  window.addEventListener('load', () => {
+    if (typeof Solar === 'undefined' || typeof Lunar === 'undefined') {
+      console.warn('lunar-javascript库未正确加载');
+    } else {
+      console.log('lunar-javascript库已正确加载');
+    }
+    
+    createFireworks();
+    // 9秒后移除烟花效果
+    setTimeout(() => {
+      const container = document.querySelector('.fireworks-container');
+      if (container) {
+        container.remove();
+      }
+    }, 9000);
+  });
+</script>
+
+<!-- 烟花效果容器 -->
+<div class="fireworks-container"></div>
+
+<!-- 烟花效果JavaScript -->
+<script>
+  /**
+   * 创建烟花效果
+   * 生成庆祝入职9周年的烟花动画
+   */
+  function createFireworks() {
+    const container = document.querySelector('.fireworks-container');
+    if (!container) return;
+    
+    // 创建多个烟花
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        createFirework(container);
+      }, i * 800);
+    }
+  }
+  
+  /**
+   * 创建单个烟花效果
+   * @param {HTMLElement} container - 烟花容器元素
+   */
+  function createFirework(container) {
+    const colors = ['#FF8CBC', '#FFD6EA', '#FFF8F6', '#FFF0F4', '#FF5B9A', '#8B8B8B'];
+    const x = Math.random() * window.innerWidth;
+    const y = Math.random() * window.innerHeight;
+    
+    // 创建粒子
+    for (let i = 0; i < 100; i++) {
+      const firework = document.createElement('div');
+      firework.classList.add('firework');
+      
+      // 随机颜色
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      firework.style.backgroundColor = color;
+      
+      // 初始位置
+      firework.style.left = `${x}px`;
+      firework.style.top = `${y}px`;
+      
+      container.appendChild(firework);
+      
+      // 随机移动方向和距离
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 50 + Math.random() * 150;
+      const duration = 2000 + Math.random() * 2000; // 延长动画持续时间到2-4秒
+      
+      // 动画
+      const animation = firework.animate([
+        { 
+          transform: `translate(0, 0) scale(1)`,
+          opacity: 1
+        },
+        { 
+          transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0)`,
+          opacity: 0
+        }
+      ], {
+        duration: duration,
+        easing: 'cubic-bezier(0.1, 0.8, 0.2, 1)'
+      });
+      
+      // 动画结束后移除元素
+      animation.onfinish = () => {
+        firework.remove();
+      };
+    }
+  }
+</script>
+</body>
+
+</html>
